@@ -4,10 +4,10 @@ pipeline {
 
     environment {
         DOCKER_CREDENTIALS_ID = 'roseaw-dockerhub'
-        DOCKER_IMAGE = 'perezi3/ci-lab3'                                                 // <------change this
+        DOCKER_IMAGE = 'perezi3/ci-lab3'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
-        GITHUB_URL = 'https://github.com/miamioh-cit/225-lab3-1.git'                   // <------change this
-        KUBECONFIG = credentials('perezi3-225')                                             // <------change this
+        GITHUB_URL = 'https://github.com/miamioh-cit/225-lab3-1.git'
+        KUBECONFIG = credentials('perezi3-225')  // Must match your uploaded secret file
     }
 
     stages {
@@ -20,37 +20,31 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}")
-                }
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS_ID}") {
-                        docker.image("${DOCKER_IMAGE}:${IMAGE_TAG}").push()
-                    }
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                    sh "docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD"
+                    sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
                 }
             }
         }
 
         stage('Deploy to Dev Environment using NodePort') {
             steps {
-                script {
-                    // Set up Kubernetes configuration using the specified KUBECONFIG
-                    def kubeConfig = readFile(KUBECONFIG)
-                    // Update deployment-dev.yaml to use the new image tag
+                withEnv(["KUBECONFIG=${KUBECONFIG}"]) {
                     sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment.yaml"
                     sh "kubectl apply -f deployment.yaml"
                 }
             }
         }
- 
+
         stage('Check Kubernetes Cluster') {
             steps {
-                script {
+                withEnv(["KUBECONFIG=${KUBECONFIG}"]) {
                     sh "kubectl get all"
                 }
             }
