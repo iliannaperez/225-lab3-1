@@ -7,7 +7,7 @@ pipeline {
         DOCKER_IMAGE = 'perezi3/ci-lab3'
         IMAGE_TAG = "build-${BUILD_NUMBER}"
         GITHUB_URL = 'https://github.com/miamioh-cit/225-lab3-1.git'
-        KUBECONFIG = credentials('perezi3-225')  // Must match your uploaded secret file
+        KUBECONFIG = credentials('perezi3-225')  // matches your Rancher kubeconfig secret file
     }
 
     stages {
@@ -20,15 +20,15 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                bat "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
             }
         }
 
         stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                    sh "docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD"
-                    sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                    bat "docker login -u %DOCKERHUB_USERNAME% -p %DOCKERHUB_PASSWORD%"
+                    bat "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
                 }
             }
         }
@@ -36,8 +36,8 @@ pipeline {
         stage('Deploy to Dev Environment using NodePort') {
             steps {
                 withEnv(["KUBECONFIG=${KUBECONFIG}"]) {
-                    sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment.yaml"
-                    sh "kubectl apply -f deployment.yaml"
+                    bat "powershell -Command \"(Get-Content deployment.yaml) -replace '${DOCKER_IMAGE}:latest', '${DOCKER_IMAGE}:${IMAGE_TAG}' | Set-Content deployment.yaml\""
+                    bat "kubectl apply -f deployment.yaml"
                 }
             }
         }
@@ -45,7 +45,7 @@ pipeline {
         stage('Check Kubernetes Cluster') {
             steps {
                 withEnv(["KUBECONFIG=${KUBECONFIG}"]) {
-                    sh "kubectl get all"
+                    bat "kubectl get all"
                 }
             }
         }
