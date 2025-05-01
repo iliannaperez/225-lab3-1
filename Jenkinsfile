@@ -1,37 +1,38 @@
 
+
 pipeline {
     agent any 
 
     environment {
         DOCKER_CREDENTIALS_ID = 'roseaw-dockerhub'
-        DOCKER_IMAGE = 'perezi3/ci-lab3'
+        DOCKER_IMAGE = 'cithit/perezi3'                                                 // <------change this
         IMAGE_TAG = "build-${BUILD_NUMBER}"
-        GITHUB_URL = 'https://github.com/iliannaperez/225-lab3-1.git'
-        KUBECONFIG = credentials('perezi3-225')
+        GITHUB_URL = 'https://github.com/iliannaperez/225-lab3-1.git'                   // <------change this
+        KUBECONFIG = credentials('perezi3-225')                                             // <------change this
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout([$class: 'GitSCM',
-                          branches: [[name: '*/main']],
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']],
                           userRemoteConfigs: [[url: "${GITHUB_URL}"]]])
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                script {
+                    docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}")
+                }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}",
-                                                  usernameVariable: 'DOCKERHUB_USERNAME',
-                                                  passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                    sh "echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin"
-                    sh "docker push ${DOCKER_IMAGE}:${IMAGE_TAG}"
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS_ID}") {
+                        docker.image("${DOCKER_IMAGE}:${IMAGE_TAG}").push()
+                    }
                 }
             }
         }
@@ -39,16 +40,20 @@ pipeline {
         stage('Deploy to Dev Environment using NodePort') {
             steps {
                 script {
+                    // Set up Kubernetes configuration using the specified KUBECONFIG
                     def kubeConfig = readFile(KUBECONFIG)
+                    // Update deployment-dev.yaml to use the new image tag
                     sh "sed -i 's|${DOCKER_IMAGE}:latest|${DOCKER_IMAGE}:${IMAGE_TAG}|' deployment.yaml"
                     sh "kubectl apply -f deployment.yaml"
                 }
             }
         }
-
+ 
         stage('Check Kubernetes Cluster') {
             steps {
-                sh "kubectl get all"
+                script {
+                    sh "kubectl get all"
+                }
             }
         }
     }
